@@ -42,27 +42,28 @@ def objective(trial):
     bce_crit = nn.BCELoss()
     l1_crit = nn.L1Loss()
 
-    lr1 = trial.suggest_float("lr",1e-7,1e-3,log=True)
-    lr2 = trial.suggest_float("lr",1e-7,1e-3,log=True)
+    lr1 = trial.suggest_float("lr_gen",1e-7,1e-3,log=True)
+    lr2 = trial.suggest_float("lr_discr",1e-7,1e-3,log=True)
 
-    optim_gen = torch.optim.Adam(G.parameters(), lr=1e-4,betas=(0.5,0.999))
-    optim_discr = torch.optim.Adam(D.parameters(), lr=1e-4,betas=(0.5,0.999))
+    optim_gen = torch.optim.Adam(G.parameters(), lr=lr1,betas=(0.5,0.999))
+    optim_discr = torch.optim.Adam(D.parameters(), lr=lr2,betas=(0.5,0.999))
 
-    n_epochs = trial.suggest_int("epoch",30,150)
+    #n_epochs = trial.suggest_int("epoch",30,150)
+    n_epochs = 40
     l1_lambda = trial.suggest_int("l1_lambda",1,150)
 
     train_gan(D,G,train_loader,n_epochs,device,bce_crit,l1_crit,optim_gen,optim_discr,l1_lambda=l1_lambda,verbose=False)
 
-    rmse = RMSELoss()
+    crit = nn.L1Loss()
     device = "cpu"
-    l_im,m_rmse = test_gen(D,G,test_loader,device,rmse)
+    l_im,m_rmse = test_gen(D,G,test_loader,device,crit)
 
     return m_rmse
 
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=80)    
+    study.optimize(objective, n_trials=200)    
 
     pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
     complete_trials = study.get_trials(deepcopy=False, states=[TrialState.COMPLETE])
@@ -83,7 +84,13 @@ if __name__ == "__main__":
         print("    {}: {}".format(key, value))
 
 
+    with open('test_result.txt', 'a') as f:
+        f.write('\n'+date+'\n')
+        f.write(str(accu)+'\n')
+        for key, value in trial.params.items():
+            f.write("    {}: {}  \n".format(key, value))
 
+        f.close()
 
 
 

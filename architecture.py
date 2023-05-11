@@ -8,25 +8,29 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
 
-def cnn_block(in_channels,out_channels,kernel_size,stride=1,padding=0, first_layer = False):
+def cnn_block(in_channels,out_channels,kernel_size,stride=1,padding='same', first_layer = False):
 
    if first_layer:
-       return nn.Conv2d(in_channels,out_channels,kernel_size,stride=stride,padding=padding)
+       return nn.Sequential(
+       nn.Conv2d(in_channels,in_channels,kernel_size,stride=stride,padding=padding),
+       nn.Conv2d(in_channels,out_channels,3,padding=padding))
    else:
        return nn.Sequential(
-           nn.Conv2d(in_channels,out_channels,kernel_size,stride=stride,padding=padding),
-           nn.BatchNorm2d(out_channels,momentum=0.1,eps=1e-5),
-           )
+           nn.Conv2d(in_channels,in_channels,kernel_size,stride=stride,padding=padding),
+           nn.Conv2d(in_channels,out_channels,3,padding=padding),
+           nn.BatchNorm2d(out_channels,momentum=0.1,eps=1e-5))
 
-def tcnn_block(in_channels,out_channels,kernel_size,stride=1,padding=0,output_padding=0, first_layer = False):
-   if first_layer:
-       return nn.ConvTranspose2d(in_channels,out_channels,kernel_size,stride=stride,padding=padding,output_padding=output_padding)
-
-   else:
+def tcnn_block(in_channels,out_channels,kernel_size,stride=1,padding='same',output_padding=0, first_layer = False):
+    if first_layer:
        return nn.Sequential(
-           nn.ConvTranspose2d(in_channels,out_channels,kernel_size,stride=stride,padding=padding,output_padding=output_padding),
-           nn.BatchNorm2d(out_channels,momentum=0.1,eps=1e-5),
-           )
+        nn.ConvTranspose2d(in_channels,in_channels,kernel_size,stride=stride,padding=padding,output_padding=output_padding),
+        nn.ConvTranspose2d(in_channels,out_channels,3,stride=1,padding=padding,output_padding=output_padding))
+
+    else:
+       return nn.Sequential(
+           nn.ConvTranspose2d(in_channels,in_channels,kernel_size,stride=stride,padding=padding,output_padding=output_padding),
+           nn.ConvTranspose2d(in_channels,out_channels,3,stride=1,padding=padding,output_padding=output_padding),
+           nn.BatchNorm2d(out_channels,momentum=0.1,eps=1e-5))
 
 
 class Generator(nn.Module):
@@ -48,12 +52,12 @@ class Generator(nn.Module):
 
     def forward(self,x):
         x0 = self.e1(x)
-        x1 = self.e2(nn.LeakyReLU(0.2)(x0))
-        x2 = self.e3(nn.LeakyReLU(0.2)(x1))
+        x1 = self.e2(nn.SiLU()(x0))
+        x2 = self.e3(nn.SiLU()(x1))
 
-        x3 = torch.cat([self.d1(nn.ReLU()(x2)),x1],1)
-        x4 = torch.cat([self.d2(nn.ReLU()(x3)),x0],1)
-        x5 = self.d3(nn.ReLU()(x4))
+        x3 = torch.cat([self.d1(nn.SiLU()(x2)),x1],1)
+        x4 = torch.cat([self.d2(nn.SiLU()(x3)),x0],1)
+        x5 = self.d3(nn.SiLU()(x4))
 
         return self.sig(x5)
 
@@ -65,18 +69,18 @@ class Discriminator(nn.Module):
    self.conv1 = cnn_block(1*2,n_chan,4,2,1, first_layer=True) # 36x44
    self.conv2 = cnn_block(n_chan,n_chan*2,4,2,1)# 18x22
    self.conv3 = cnn_block(n_chan*2,1,4,2,1, first_layer=True) # 9x11
-
-
-
-
    self.sigmoid = nn.Sigmoid()
- def forward(self, x, y):
-   O = torch.cat([x,y],dim=1)
-   O = nn.LeakyReLU(0.2)(self.conv1(O))
-   O = nn.LeakyReLU(0.2)(self.conv2(O))
-   O = self.conv3(O)
 
-   return self.sigmoid(O)
+
+
+ def forward(self, x, y):
+
+    O = torch.cat([x,y],dim=1)
+    O = nn.SiLU()(self.conv1(O))
+    O = nn.SiLU()(self.conv2(O))
+    O = self.conv3(O)
+
+    return self.sigmoid(O)
 
 
 
@@ -168,7 +172,7 @@ def train_gan(D,G,train_loader,n_epochs,device,bce_crit,l1_crit,optim_gen,optim_
         tbw.close()
 
 
-def test_gen(D,G,test_loader,device,rmse,get_im=False):
+def test_gen(D,G,test_loader,device,crit,get_im=False):
     D,G = D.to(device),G.to(device)
     l_im = []
     l_rmse = []
@@ -188,7 +192,7 @@ def test_gen(D,G,test_loader,device,rmse,get_im=False):
 
             gen = G(x)
 
-            l_rmse.append(rmse(gen,y))
+            l_rmse.append(crit(gen,y))
 
             pred = D(gen,x)
 
@@ -212,20 +216,35 @@ def test_gen(D,G,test_loader,device,rmse,get_im=False):
 
 
 
-class RMSELoss(torch.nn.Module):
-    def __init__(self,coeff=1):
-        super().__init__()
-        self.mse = torch.nn.MSELoss()
-        self.coeff = coeff
-        
-    def forward(self,yhat,y):
-        return self.coeff*torch.sqrt(self.mse(yhat,y))
 
 
+class Generator2(nn.Module):
 
 
+    def __init__(self,n_chan=16):
+        super(Generator,self).__init__()
+        self.e1 = cnn_block(1,n_chan,4,2,1, first_layer = True)
+        self.e2 = cnn_block(n_chan,n_chan*2,4,2,1)
+        self.e3 = cnn_block(n_chan*2,n_chan*4,4,2,1, first_layer=True)
 
 
+        self.d1 = tcnn_block(n_chan*4,n_chan*2,4,2,1)
+        self.d2 = tcnn_block(n_chan*2*2,n_chan,4,2,1)
+        self.d3 = tcnn_block(n_chan*2,1,4,2,1, first_layer=True)
+
+        self.sig = nn.Sigmoid()
+
+
+    def forward(self,x):
+        x0 = self.e1(x)
+        x1 = self.e2(nn.SiLU()(x0))
+        x2 = self.e3(nn.SiLU()(x1))
+
+        x3 = torch.cat([self.d1(nn.SiLU()(x2)),x1],1)
+        x4 = torch.cat([self.d2(nn.SiLU()(x3)),x0],1)
+        x5 = self.d3(nn.SiLU()(x4))
+
+        return self.sig(x5)
 
 
 
