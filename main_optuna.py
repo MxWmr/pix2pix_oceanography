@@ -86,7 +86,6 @@ if __name__ == "__main__":
 
     with open('test_result.txt', 'a') as f:
         f.write('\n'+date+'\n')
-        f.write(str(accu)+'\n')
         for key, value in trial.params.items():
             f.write("    {}: {}  \n".format(key, value))
 

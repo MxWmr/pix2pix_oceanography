@@ -1,63 +1,36 @@
-
-# import modules
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
-plt.style.use('dark_background')
+ import torch
 from architecture import *
-from data_load import prepare_loaders
+from datetime import datetime
+import numpy as np 
 from plot_fct import *
+from data_load import *
 
 
+save_path = '/usr/home/mwemaere/neuro/pix2pix/Save/'
 
-if torch.cuda.is_available():
-    device = "cuda" 
-else:
-    raise('No GPU !')
-
-date = '04_12_11:47_'
-
-# load data
-Path = 
-data_path = ""
-data = torch.load(data_path + "SSH_MERCATOR_1%3.pt")
+data_path = '/usr/home/mwemaere/neuro/Data2/'
 
 
-# data -= data.min(1, keepdim=True)[0]
-# data /= data.max(1, keepdim=True)[0]
+test_sat = torch.load(data_path + 'test_ssh_sat.pt')[:,:,:,:88]
+test_mod = torch.load(data_path + 'test_ssh_mod.pt')[:,:,:,:88]
+
+test_loader = ConcatData([test_sat,test_mod],shuffle=False)
 
 
-data = torch.unsqueeze(data,1)
+G = Generator()
 
+D = Discriminator()
+   
+   
+device = 'cpu'
+date = '05_22_16:31_'
 
-# prepare data
-batch_size=32
-train_loader,valid_loader,test_loader = prepare_loaders(data,batch_size=batch_size)
+D.load_state_dict(torch.load(save_path+date+'discr.pth'))
+G.load_state_dict(torch.load(save_path+date+'gen.pth'))
 
-# create model
-model = NN()
+crit = RMSELoss()
 
+l_im,m_rmse = test_gen(D,G,test_loader,device,crit,get_im=[25,186,245])
 
-saved_path = Path+'Save/'+date+'model.pth'
-model.load_state_dict(torch.load(saved_path))
-model = model.to(device)
-
-
-
-# Test
-mean,std, l_im = model.test(test_loader,device, get_im=[15,58,245])
-
-
-print(mean)
-print(std)
-
-with open('test_result.txt', 'a') as f:
-    f.write('\n'+date+'\n')
-    f.write(str(mean)+'\n')
-    f.write(str(std)+'\n')
-
-    f.close()
-
-# plot some results
-
-plot_test(l_im)
+plot_test(l_im,date,save_path)
+plot_diff(l_im,date,save_path)
