@@ -66,3 +66,26 @@ def plot_diff(l_im,date,save_path,cmap="coolwarm",save=True):
         plt.savefig(save_path+date+'diffs.png')
     plt.show()
 
+
+def plot_year(l_year,date,save_path,cmap="coolwarm",save=True):
+
+    plt.figure(1)
+    
+    x=list(range(12))
+    my_xticks = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec']
+    plt.xticks(x, my_xticks)
+    plt.plot(x,l_year)
+    plt.ylabel('rmse (m)')
+    if save:
+        plt.savefig(save_path+date+'year.png')
+    plt.show()
+
+def print_map(map_pred,date,save_path,cmap="coolwarm",save=True):
+
+    plt.figure(1)
+    plt.imshow(torch.squeeze(map_pred).cpu().numpy())
+    plt.colorbar()
+    plt.title("Error probabilty map")
+    if save:
+        plt.savefig(save_path+date+'map.png')
+    plt.show()

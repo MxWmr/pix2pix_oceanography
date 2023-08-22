@@ -1,9 +1,0 @@
-U-NET
-mean RMSE with target on the test set: 0.050 m
-mean RMSE with input on the test set: 0.085 m
-
-
-Pix2Pix
-discriminator accuracy: 92.58241758241759%
-mean RMSE with target on the test set: 0.054 m
-mean RMSE with input on the test set: 0.091 m
